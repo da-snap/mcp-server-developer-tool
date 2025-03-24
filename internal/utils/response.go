@@ -26,7 +26,7 @@ func CreateErrorResponseWithData(message string, data interface{}) *mcp.ToolResp
 		"success": false,
 		"error":   message,
 	}
-	
+
 	// Add all fields from data to the response
 	// This requires that data is a struct or map
 	if dataMap, ok := data.(map[string]interface{}); ok {
@@ -38,14 +38,14 @@ func CreateErrorResponseWithData(message string, data interface{}) *mcp.ToolResp
 		dataJSON, _ := json.Marshal(data)
 		var dataMap map[string]interface{}
 		json.Unmarshal(dataJSON, &dataMap)
-		
+
 		for k, v := range dataMap {
 			if k != "success" && k != "error" { // Don't overwrite these
 				response[k] = v
 			}
 		}
 	}
-	
+
 	// Marshal the combined response
 	resultJSON, _ := json.Marshal(response)
 	return mcp.NewToolResponse(mcp.NewTextContent(string(resultJSON)))

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	mcp "github.com/metoro-io/mcp-golang"
+	"mcp-server/internal/config"
 	"mcp-server/internal/utils"
 )
 
@@ -28,11 +29,18 @@ type ShowFileResult struct {
 }
 
 // ShowFileTool implements the show_file tool
-type ShowFileTool struct{}
+type ShowFileTool struct {
+	config *config.ServerConfig
+}
 
 // NewShowFileTool creates a new ShowFileTool instance
 func NewShowFileTool() *ShowFileTool {
 	return &ShowFileTool{}
+}
+
+// SetConfig sets the server configuration
+func (t *ShowFileTool) SetConfig(cfg *config.ServerConfig) {
+	t.config = cfg
 }
 
 // Name returns the tool name
@@ -47,6 +55,25 @@ func (t *ShowFileTool) Description() string {
 
 // Execute shows file contents with the provided arguments
 func (t *ShowFileTool) Execute(args ShowFileArgs) (*mcp.ToolResponse, error) {
+	// Check if path is allowed by configuration
+	if t.config != nil {
+		allowed, err := t.config.IsPathAllowed(args.FilePath)
+		if err != nil || !allowed {
+			errorMsg := "Access to this file path is not allowed by server configuration"
+			if err != nil {
+				errorMsg = fmt.Sprintf("%s: %v", errorMsg, err)
+			}
+			result := ShowFileResult{
+				Success:    false,
+				Error:      errorMsg,
+				Content:    "",
+				LinesShown: 0,
+				TotalLines: 0,
+			}
+			return utils.CreateSuccessResponse(result), nil
+		}
+	}
+
 	// Check if file exists
 	fileInfo, err := os.Stat(args.FilePath)
 	if err != nil {
@@ -62,7 +89,7 @@ func (t *ShowFileTool) Execute(args ShowFileArgs) (*mcp.ToolResponse, error) {
 		}
 		return utils.CreateErrorResponse(fmt.Sprintf("Error checking file: %v", err)), nil
 	}
-	
+
 	// Don't read directories
 	if fileInfo.IsDir() {
 		result := ShowFileResult{
@@ -74,7 +101,7 @@ func (t *ShowFileTool) Execute(args ShowFileArgs) (*mcp.ToolResponse, error) {
 		}
 		return utils.CreateSuccessResponse(result), nil
 	}
-	
+
 	// Read file content
 	content, err := os.ReadFile(args.FilePath)
 	if err != nil {
@@ -87,17 +114,17 @@ func (t *ShowFileTool) Execute(args ShowFileArgs) (*mcp.ToolResponse, error) {
 		}
 		return utils.CreateSuccessResponse(result), nil
 	}
-	
+
 	// Split into lines
 	lines := strings.Split(string(content), "\n")
 	totalLines := len(lines)
-	
+
 	// Ensure start line is valid
 	startLine := args.StartLine
 	if startLine < 1 {
 		startLine = 1
 	}
-	
+
 	// Check if start line is beyond file length
 	if startLine > totalLines {
 		result := ShowFileResult{
@@ -109,10 +136,10 @@ func (t *ShowFileTool) Execute(args ShowFileArgs) (*mcp.ToolResponse, error) {
 		}
 		return utils.CreateSuccessResponse(result), nil
 	}
-	
+
 	// Convert to 0-based index
 	startIndex := startLine - 1
-	
+
 	// Determine end index
 	endIndex := totalLines
 	if args.NumLines != nil {
@@ -121,11 +148,11 @@ func (t *ShowFileTool) Execute(args ShowFileArgs) (*mcp.ToolResponse, error) {
 			endIndex = totalLines
 		}
 	}
-	
+
 	// Extract requested lines
 	selectedLines := lines[startIndex:endIndex]
 	selectedContent := strings.Join(selectedLines, "\n")
-	
+
 	// Create result
 	result := ShowFileResult{
 		Success:    true,
@@ -135,6 +162,6 @@ func (t *ShowFileTool) Execute(args ShowFileArgs) (*mcp.ToolResponse, error) {
 		StartLine:  startLine,
 		EndLine:    startIndex + len(selectedLines) + 1,
 	}
-	
+
 	return utils.CreateSuccessResponse(result), nil
 }
